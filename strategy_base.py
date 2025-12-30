@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 from typing import Dict, Tuple
 from technical_indicators import TechnicalIndicators
+from config.settings import settings
 
 
 class StrategyBase(ABC):
@@ -17,6 +18,7 @@ class StrategyBase(ABC):
     def __init__(self, name: str):
         self.name = name
         self.ti = TechnicalIndicators()
+        self.config = settings.get(f'strategies.{name}', {})
         
     @abstractmethod
     def generate_signals(self, data: pd.DataFrame) -> pd.DataFrame:

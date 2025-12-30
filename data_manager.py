@@ -1,24 +1,38 @@
 """
-DATA MANAGER - Improved synthetic data
+DATA MANAGER - Improved synthetic data with Caching
 """
 import pandas as pd
 import numpy as np
 import yfinance as yf
-from datetime import datetime
-from typing import List, Tuple
-import logging
+from datetime import datetime, timedelta
+from typing import List, Tuple, Optional
 import os
 import time
+from utils.logger import setup_logging
+from config.settings import settings
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
+logger = setup_logging(__name__)
 
 class DataManager:
-    def __init__(self, data_dir: str = "./data"):
-        self.data_dir = data_dir
-        os.makedirs(data_dir, exist_ok=True)
+    def __init__(self):
+        self.data_dir = settings.get('data.data_dir', './data')
+        self.cache_expiry_days = settings.get('data.cache_expiry_days', 1)
+        os.makedirs(self.data_dir, exist_ok=True)
+
+    def _get_cache_path(self, symbol: str, start_date: str, end_date: str, interval: str) -> str:
+        """Generate a filename for the cache."""
+        filename = f"{symbol}_{start_date}_{end_date}_{interval}.parquet"
+        return os.path.join(self.data_dir, filename)
+
+    def _is_cache_valid(self, filepath: str) -> bool:
+        """Check if cache file exists and is recent."""
+        if not os.path.exists(filepath):
+            return False
         
+        file_time = datetime.fromtimestamp(os.path.getmtime(filepath))
+        age = datetime.now() - file_time
+        return age.days < self.cache_expiry_days
+
     def _generate_realistic_synthetic_data(
         self,
         symbol: str,
@@ -35,7 +49,11 @@ class DataManager:
         np.random.seed(hash(symbol) % 2**32)
         
         # Create regime periods (bull/bear/sideways)
-        regime_length = n // 4  # 4 regimes over period
+        if n > 4:
+            regime_length = n // 4  # 4 regimes over period
+        else:
+            regime_length = n
+
         regimes = []
         
         for i in range(4):
@@ -103,11 +121,22 @@ class DataManager:
         start_date: str,
         end_date: str,
         interval: str = "1d",
-        use_synthetic_on_fail: bool = True
+        use_synthetic_on_fail: bool = True,
+        force_refresh: bool = False
     ) -> pd.DataFrame:
-        """Download with improved synthetic fallback."""
+        """Download with improved synthetic fallback and caching."""
         logger.info(f"Fetching {symbol} from {start_date} to {end_date}")
         
+        cache_path = self._get_cache_path(symbol, start_date, end_date, interval)
+
+        if not force_refresh and self._is_cache_valid(cache_path):
+            try:
+                df = pd.read_parquet(cache_path)
+                logger.info(f"✅ Loaded {len(df)} bars from cache for {symbol}")
+                return df
+            except Exception as e:
+                logger.warning(f"Failed to read cache: {e}")
+
         # Try yfinance
         for attempt in range(3):
             try:
@@ -117,6 +146,14 @@ class DataManager:
                 if not df.empty:
                     df.columns = [col.lower() for col in df.columns]
                     df = df.ffill(limit=3).dropna()
+
+                    # Save to cache
+                    try:
+                        df.to_parquet(cache_path)
+                        logger.info(f"Saved {symbol} to cache.")
+                    except Exception as e:
+                        logger.warning(f"Failed to save cache: {e}")
+
                     logger.info(f"✅ Downloaded {len(df)} bars from Yahoo Finance")
                     return df
                     
@@ -128,7 +165,16 @@ class DataManager:
         # Fallback to REALISTIC synthetic
         if use_synthetic_on_fail:
             logger.warning(f"Using REALISTIC synthetic data for {symbol}")
-            return self._generate_realistic_synthetic_data(symbol, start_date, end_date)
+            df = self._generate_realistic_synthetic_data(symbol, start_date, end_date)
+
+            # Save synthetic data to cache as well, to simulate persistent data
+            try:
+                df.to_parquet(cache_path)
+                logger.info(f"Saved synthetic {symbol} to cache.")
+            except Exception as e:
+                logger.warning(f"Failed to save synthetic cache: {e}")
+
+            return df
         else:
             raise ValueError(f"Failed to fetch {symbol}")
             
