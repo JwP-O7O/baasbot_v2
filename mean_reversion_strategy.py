@@ -16,19 +16,15 @@ class MeanReversionStrategy(StrategyBase):
     Simple mean reversion using RSI.
     
     Rules:
-    - BUY when RSI < 30 (oversold)
-    - SELL when RSI > 70 (overbought)
+    - BUY when RSI < oversold (default 30)
+    - SELL when RSI > overbought (default 70)
     - HOLD otherwise
     """
     
-    def __init__(
-        self,
-        rsi_oversold: int = 30,
-        rsi_overbought: int = 70
-    ):
-        super().__init__(name="Mean Reversion")
-        self.rsi_oversold = rsi_oversold
-        self.rsi_overbought = rsi_overbought
+    def __init__(self):
+        super().__init__(name="mean_reversion")
+        self.rsi_oversold = self.config.get('rsi_entry_low', 30)
+        self.rsi_overbought = self.config.get('rsi_entry_high', 70)
         
     def generate_signals(self, data: pd.DataFrame) -> pd.DataFrame:
         """Generate buy/sell signals based on RSI."""
@@ -37,10 +33,10 @@ class MeanReversionStrategy(StrategyBase):
         # Initialize signal column
         result['signal'] = 0
         
-        # BUY signal: RSI < 30
+        # BUY signal: RSI < oversold
         result.loc[result['rsi_14'] < self.rsi_oversold, 'signal'] = 1
         
-        # SELL signal: RSI > 70
+        # SELL signal: RSI > overbought
         result.loc[result['rsi_14'] > self.rsi_overbought, 'signal'] = -1
         
         return result

@@ -18,3 +18,5 @@ requests==2.31.0
 tqdm==4.66.1
 websockets<11,>=9.0
 jupyter==1.0.0
+PyYAML
+pyarrow
