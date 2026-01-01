@@ -10,6 +10,7 @@ from typing import List
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 from strategy_base import StrategyBase
 
 
@@ -67,6 +68,42 @@ class StrategyComparison:
         print(f"\n📊 Chart saved: {filename}")
         plt.close()
 
+    def plot_interactive_comparison(self, filename='strategy_comparison.html'):
+        """Plot interactive equity curves using Plotly."""
+        fig = go.Figure()
+
+        for strategy_name, results in self.results.items():
+            equity = results['equity_curve']
+            returns = (equity / equity.iloc[0] - 1) * 100
+
+            fig.add_trace(go.Scatter(
+                x=returns.index,
+                y=returns.values,
+                mode='lines',
+                name=strategy_name,
+                hovertemplate='%{y:.2f}%<extra></extra>'
+            ))
+
+        fig.update_layout(
+            title='Strategy Comparison - Cumulative Returns (%)',
+            xaxis_title='Date',
+            yaxis_title='Return (%)',
+            hovermode='x unified',
+            template='plotly_white',
+            legend=dict(
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=0.01
+            )
+        )
+
+        # Add zero line
+        fig.add_hline(y=0, line_dash="dash", line_color="black", opacity=0.5)
+
+        fig.write_html(filename)
+        print(f"📊 Interactive chart saved: {filename}")
+
 
 if __name__ == "__main__":
     from data_manager import DataManager
@@ -105,5 +142,6 @@ if __name__ == "__main__":
     
     # Plot
     comparator.plot_comparison()
+    comparator.plot_interactive_comparison()
     
     print("\n✅ Comparison complete!")

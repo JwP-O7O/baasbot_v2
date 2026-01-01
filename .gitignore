@@ -55,3 +55,7 @@ Thumbs.db
 # Logs
 *.log
 *.parquet
+
+# Generated Reports
+strategy_comparison.html
+strategy_comparison.png
